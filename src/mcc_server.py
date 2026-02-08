@@ -8,6 +8,7 @@ import socket
 import threading
 import time
 import hashlib
+import json
 from typing import Dict, Optional
 from dataclasses import dataclass
 
@@ -327,11 +328,18 @@ class MCCServer:
                 try:
                     msg_data = receive_message(client_socket)
                     if msg_data:
-                        # Handle incoming messages if needed
-                        pass
+                        opcode = get_opcode(msg_data)
+                        # Handle ACK or other drone responses
+                        if opcode == OpCode.ACK:
+                            ack_msg = AckMessage.from_bytes(json.dumps(msg_data).encode('utf-8'))
+                            print(f"[MCC] ← ACK from {drone_id}: {ack_msg.message}")
+                        else:
+                            print(f"[MCC] ← Message from {drone_id}: opcode={opcode}")
                 except socket.timeout:
                     continue
-                except:
+                except Exception as e:
+                    if self.running:
+                        print(f"[MCC] Connection lost with {drone_id}: {e}")
                     break
         except Exception as e:
             print(f"[MCC] Connection error with {drone_id}: {e}")
@@ -352,19 +360,24 @@ class MCCServer:
     
     def broadcast_command(self, command: str):
         """Broadcast command to all drones using group key"""
-        with self.drones_lock:
-            if not self.drones:
-                print("[MCC] No drones connected to broadcast to")
-                return
+        try:
+            # First, check if we have drones and make a snapshot
+            with self.drones_lock:
+                if not self.drones:
+                    print("[MCC] No drones connected to broadcast to")
+                    return
+                
+                # Create a snapshot of drones to avoid holding lock during I/O
+                drones_snapshot = list(self.drones.items())
             
             print(f"\n[MCC] Broadcasting command: '{command}'")
             
-            # Generate/regenerate group key
+            # Generate/regenerate group key (needs lock briefly)
             self.generate_group_key()
             
-            # Send group key to all drones
+            # Send group key to all drones (no lock needed - using snapshot)
             print("[MCC] Distributing group key...")
-            for drone_id, drone_info in self.drones.items():
+            for drone_id, drone_info in drones_snapshot:
                 try:
                     self.send_group_key(drone_info)
                     print(f"[MCC]   ✓ Sent to {drone_id}")
@@ -378,7 +391,7 @@ class MCCServer:
             
             cmd_msg = GroupCommandMessage(encrypted_cmd, hmac_tag)
             
-            for drone_id, drone_info in self.drones.items():
+            for drone_id, drone_info in drones_snapshot:
                 try:
                     send_message(drone_info.socket, cmd_msg)
                     print(f"[MCC]   ✓ Broadcast to {drone_id}")
@@ -386,6 +399,11 @@ class MCCServer:
                     print(f"[MCC]   ✗ Failed to broadcast to {drone_id}: {e}")
             
             print(f"[MCC] ✓ Broadcast complete!\n")
+        
+        except Exception as e:
+            print(f"[MCC] Error during broadcast: {e}")
+            import traceback
+            traceback.print_exc()
     
     def generate_group_key(self):
         """Generate group key from all session keys"""
@@ -398,8 +416,8 @@ class MCCServer:
             for drone_info in self.drones.values():
                 data += drone_info.session_key
             
-            # Add MCC's private key contribution
-            kr_mcc = crypto_utils.int_to_bytes(self.keypair.x, 32)
+            # Add MCC's private key contribution (auto-calculate byte length for large numbers)
+            kr_mcc = crypto_utils.int_to_bytes(self.keypair.x)
             data += kr_mcc
             
             self.group_key = hashlib.sha256(data).digest()

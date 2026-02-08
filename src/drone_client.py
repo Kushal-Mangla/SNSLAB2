@@ -376,6 +376,14 @@ class DroneClient:
             
             # Execute command (for demo, just print)
             self.execute_command(command)
+            
+            # Send ACK back to MCC
+            try:
+                ack_msg = AckMessage(f"Command '{command}' received")
+                send_message(self.socket, ack_msg)
+                print(f"[{self.drone_id}] ✓ Sent ACK to MCC")
+            except Exception as e:
+                print(f"[{self.drone_id}] Failed to send ACK: {e}")
         
         except Exception as e:
             print(f"[{self.drone_id}] Error handling command: {e}")

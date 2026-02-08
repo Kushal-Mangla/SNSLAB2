@@ -268,6 +268,28 @@ class ShutdownMessage:
         return ShutdownMessage()
 
 
+class AckMessage:
+    """Acknowledgment message"""
+    
+    def __init__(self, message: str = ""):
+        self.opcode = OpCode.ACK
+        self.message = message
+    
+    def to_bytes(self) -> bytes:
+        """Serialize to bytes"""
+        data = {
+            'opcode': self.opcode,
+            'message': self.message
+        }
+        return json.dumps(data).encode('utf-8')
+    
+    @staticmethod
+    def from_bytes(data: bytes) -> 'AckMessage':
+        """Deserialize from bytes"""
+        obj = json.loads(data.decode('utf-8'))
+        return AckMessage(obj.get('message', ''))
+
+
 def send_message(sock, message: Message) -> None:
     """
     Send a message over socket

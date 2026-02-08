@@ -20,6 +20,7 @@ class OpCode:
     ERR_MISMATCH = 60    # Error: parameter mismatch
     GROUP_KEY = 70       # Group key distribution
     GROUP_CMD = 80       # Group command broadcast
+    ACK = 85             # Acknowledgment
     SHUTDOWN = 90        # Shutdown signal
 
 # Timeouts and limits
