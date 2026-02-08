@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test coverage
+.coverage
+htmlcov/
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Temporary files
+*.tmp
+*.bak
+.cache/
