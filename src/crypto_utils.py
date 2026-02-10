@@ -74,24 +74,62 @@ class CryptoUtils:
     @staticmethod
     def mod_inverse(a: int, m: int) -> int:
         """
-        Modular inverse using Python's built-in pow function
+        Modular inverse using Extended Euclidean Algorithm (manual implementation)
         Computes x such that (a * x) % m == 1
+        
+        The Extended Euclidean Algorithm finds integers x and y such that:
+        a*x + m*y = gcd(a, m)
+        
+        If gcd(a, m) = 1, then x is the modular inverse of a mod m.
+        
         Args:
             a: Number to find inverse of
             m: Modulus
         Returns:
             Modular inverse of a mod m
         Raises:
-            ValueError: If inverse doesn't exist
+            ValueError: If inverse doesn't exist (gcd(a, m) != 1)
         """
         if m == 0:
             raise ValueError("Modulus cannot be zero")
+        if m == 1:
+            return 0
         
-        try:
-            # Python 3.8+ pow(a, -1, m) computes modular inverse efficiently
-            return pow(a, -1, m)
-        except ValueError:
-            raise ValueError(f"Modular inverse does not exist for {a} mod {m}")
+        # Save original modulus for final adjustment
+        original_m = m
+        
+        # Extended Euclidean Algorithm
+        # We maintain: a = old_a * x0 + old_m * y0
+        #              m = old_a * x1 + old_m * y1
+        x0, x1 = 0, 1
+        
+        # Normalize a to be positive and less than m
+        a = a % m
+        
+        # Apply Extended Euclidean Algorithm
+        while a > 1:
+            if m == 0:
+                raise ValueError(f"Modular inverse does not exist for {a} mod {original_m}")
+            
+            # Quotient and remainder
+            q = a // m
+            
+            # Update a and m (standard Euclidean algorithm)
+            a, m = m, a % m
+            
+            # Update coefficients (extended part)
+            x0, x1 = x1 - q * x0, x0
+        
+        # At this point, a should be gcd(original_a, original_m)
+        # If a != 1, then gcd != 1, so inverse doesn't exist
+        if a != 1:
+            raise ValueError(f"Modular inverse does not exist for {a} mod {original_m}")
+        
+        # Make x1 positive if negative
+        if x1 < 0:
+            x1 += original_m
+        
+        return x1
     
     @staticmethod
     def gcd(a: int, b: int) -> int:

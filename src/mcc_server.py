@@ -5,6 +5,7 @@ Multi-threaded server handling multiple drones with concurrent authentication
 """
 
 import socket
+import select
 import threading
 import time
 import hashlib
@@ -327,6 +328,10 @@ class MCCServer:
             while self.running:
                 try:
                     msg_data = receive_message(client_socket)
+                    if msg_data is None:
+                        # Connection closed by client
+                        print(f"[MCC] Connection closed by {drone_id}")
+                        break
                     if msg_data:
                         opcode = get_opcode(msg_data)
                         # Handle ACK or other drone responses
@@ -337,16 +342,48 @@ class MCCServer:
                             print(f"[MCC] ← Message from {drone_id}: opcode={opcode}")
                 except socket.timeout:
                     continue
+                except (ConnectionResetError, BrokenPipeError, OSError) as e:
+                    # Connection lost
+                    print(f"[MCC] Connection lost with {drone_id}")
+                    break
                 except Exception as e:
                     if self.running:
-                        print(f"[MCC] Connection lost with {drone_id}: {e}")
+                        print(f"[MCC] Error communicating with {drone_id}: {e}")
                     break
         except Exception as e:
             print(f"[MCC] Connection error with {drone_id}: {e}")
     
+    def is_socket_connected(self, sock: socket.socket) -> bool:
+        """Check if socket is still connected"""
+        try:
+            # Use select with zero timeout to check if socket is readable
+            # If it's readable but recv returns empty, connection is closed
+            ready = select.select([sock], [], [], 0)
+            if ready[0]:
+                # Socket is readable, check if it's actually closed
+                try:
+                    data = sock.recv(1, socket.MSG_PEEK | socket.MSG_DONTWAIT)
+                    if len(data) == 0:
+                        return False  # Connection closed
+                except (socket.error, BlockingIOError):
+                    pass
+            return True
+        except:
+            return False
+    
     def list_drones(self):
         """List all authenticated drones"""
         with self.drones_lock:
+            # Clean up disconnected drones first
+            disconnected = []
+            for drone_id, info in list(self.drones.items()):
+                if not self.is_socket_connected(info.socket):
+                    disconnected.append(drone_id)
+            
+            for drone_id in disconnected:
+                del self.drones[drone_id]
+                print(f"[MCC] Removed disconnected drone: {drone_id}")
+            
             if not self.drones:
                 print("[MCC] No drones connected")
                 return
